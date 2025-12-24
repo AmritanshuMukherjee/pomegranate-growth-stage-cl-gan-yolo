@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Attention-Guided Curriculum Learning with GAN-Enhanced YOLO for Multi-Source Pomegranate Growth Stage Classification
 
 A comprehensive deep learning framework for detecting and classifying pomegranate growth stages using YOLO with attention mechanisms, curriculum learning, and GAN-based data augmentation.
@@ -210,3 +211,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - Pix2Pix GAN implementation
 - Dataset: Zhao et al. (2023)
 
+=======
+# pomegranate-growth-stage-cl-gan-yolo
+>>>>>>> 5ecb7d7a3445b87a8bf89284ce06db5515e6b80c
