@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.env
+venv/
+
+# Data
+data/
+datasets/
+
+# Training outputs
+experiments/
+runs/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

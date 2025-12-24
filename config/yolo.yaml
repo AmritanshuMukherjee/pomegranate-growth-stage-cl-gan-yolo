@@ -1,0 +1,56 @@
+# YOLO Model Configuration
+
+model:
+  name: "YOLOv8"
+  version: "8"
+  
+  # Architecture
+  architecture:
+    backbone: "CSPDarknet"
+    neck: "PANet"
+    head: "YOLOHead"
+  
+  # Model size variants: nano, small, medium, large, xlarge
+  size: "medium"
+  
+  # Input configuration
+  input:
+    size: 640
+    channels: 3
+  
+  # Anchor configuration
+  anchors:
+    enabled: true
+    num_anchors: 3
+  
+  # Loss configuration
+  loss:
+    box_loss: "CIoU"
+    cls_loss: "BCE"
+    obj_loss: "BCE"
+    box_loss_weight: 7.5
+    cls_loss_weight: 0.5
+    obj_loss_weight: 1.0
+  
+  # Training parameters
+  training:
+    batch_size: 16
+    epochs: 100  # Reduced for faster training, can increase if needed
+    learning_rate: 0.01
+    momentum: 0.937
+    weight_decay: 0.0005
+    warmup_epochs: 3
+    warmup_momentum: 0.8
+    warmup_bias_lr: 0.1
+  
+  # Optimizer
+  optimizer:
+    type: "SGD"
+    lr_scheduler: "cosine"
+  
+  # Validation
+  validation:
+    interval: 1
+    save_best: true
+    metrics: ["mAP@0.5", "mAP@0.5:0.95"]
+

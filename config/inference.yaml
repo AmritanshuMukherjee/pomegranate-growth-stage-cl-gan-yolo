@@ -1,0 +1,40 @@
+# Inference Configuration
+
+inference:
+  # Model settings
+  model:
+    checkpoint_path: "experiments/exp_005_full_model/checkpoints/best.pt"
+    model_type: "full"  # baseline, attention, curriculum, gan, full
+    confidence_threshold: 0.25
+    iou_threshold: 0.45
+    max_detections: 1000
+  
+  # Input settings
+  input:
+    source: "image"  # image, video, webcam, directory
+    path: null
+    image_size: 640
+    save_results: true
+    output_dir: "results"
+  
+  # Visualization
+  visualization:
+    show_labels: true
+    show_confidence: true
+    show_boxes: true
+    line_width: 2
+    font_size: 1.0
+    colors:
+      - [255, 0, 0]    # bud - red
+      - [0, 255, 0]    # flower - green
+      - [0, 0, 255]    # fruit_immature - blue
+      - [255, 255, 0]  # fruit_mature - yellow
+      - [255, 0, 255]  # harvest - magenta
+  
+  # Export settings
+  export:
+    format: "onnx"  # onnx, torchscript, tensorrt, coreml
+    opset_version: 12
+    simplify: true
+    dynamic: false
+

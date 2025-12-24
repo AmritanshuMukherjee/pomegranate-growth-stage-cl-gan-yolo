@@ -1,0 +1,15 @@
+dataset:
+  name: pomegranate_growth_stage
+  image_size: 640
+  num_classes: 3
+
+  yolo:
+    root: data/yolo
+    train: train
+    val: val
+    test: test
+
+  classes:
+    - immature
+    - mature
+    - overripe

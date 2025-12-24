@@ -1,0 +1,30 @@
+dataset:
+  name: pomegranate_growth_stage
+  image_size: 640
+  num_classes: 5
+
+  yolo:
+    root: data/yolo
+    train: train
+    val: val
+    test: test
+
+  classes:
+    - immature
+    - mature
+    - overripe
+    - damaged
+    - diseased
+
+
+training:
+  epochs: 30              # Phase-1 baseline (fast & safe)
+  learning_rate: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+
+
+dataloader:
+  batch_size: 8            # CPU-safe
+  num_workers: 0           # IMPORTANT for Windows
+  pin_memory: false
