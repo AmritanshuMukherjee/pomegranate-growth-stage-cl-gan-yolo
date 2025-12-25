@@ -14,13 +14,15 @@ def train_loop(model, train_cfg, dataset_cfg, device):
     logging.info("Starting YOLO training loop")
 
     # --------------------------------------------------
-    # Dataset root (AUTO works on Kaggle)
+    # Dataset root
     # --------------------------------------------------
-    yolo_root = dataset_cfg["dataset"]["yolo"]["root"]
+    yolo_root = dataset_cfg["yolo"]["root"]
+
+    # AUTO support for Kaggle
     if yolo_root == "AUTO":
         yolo_root = "/kaggle/input/pomegranate-dataset/pomegranate_dataset/yolo"
 
-    logging.info(f"Using Kaggle dataset: {yolo_root}")
+    logging.info(f"Using dataset root: {yolo_root}")
 
     # --------------------------------------------------
     # Experiment directory
