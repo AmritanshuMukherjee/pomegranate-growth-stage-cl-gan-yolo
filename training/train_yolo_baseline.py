@@ -26,7 +26,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Using device: {device}")
 
-   model = YOLOBase(
+  model = YOLOBase(
     num_classes=dataset_cfg["num_classes"]
 ).to(device)
 
