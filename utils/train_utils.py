@@ -1,59 +1,60 @@
-import os
-import time
-import torch
 import logging
-from pathlib import Path
+import torch
 from torch.utils.data import DataLoader
+from torch.optim import SGD
 from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
 
-from utils.data_loader import YOLODataset
+from utils.data_loader import YOLODataset, yolo_collate_fn
 from utils.augmentations import get_train_transforms, get_val_transforms
-
-
-def resolve_yolo_root():
-    kaggle_root = "/kaggle/input/pomegranate-dataset/pomegranate_dataset/yolo"
-    if os.path.exists(kaggle_root):
-        logging.info(f"Using Kaggle dataset: {kaggle_root}")
-        return kaggle_root
-    return "data/yolo"
 
 
 def train_loop(model, train_cfg, dataset_cfg, device):
     logging.info("Starting YOLO training loop")
 
-    yolo_root = resolve_yolo_root()
+    # =========================
+    # DATASET PATH (KAGGLE SAFE)
+    # =========================
+    if "kaggle_root" in dataset_cfg:
+        yolo_root = dataset_cfg["kaggle_root"]
+        logging.info(f"Using Kaggle dataset: {yolo_root}")
+    else:
+        yolo_root = dataset_cfg["yolo"]["root"]
 
-    train_tfms = get_train_transforms(dataset_cfg)
-    val_tfms = get_val_transforms(dataset_cfg)
+    train_transforms = get_train_transforms(dataset_cfg)
+    val_transforms = get_val_transforms(dataset_cfg)
 
-    train_ds = YOLODataset(yolo_root, "train", train_tfms)
-    val_ds = YOLODataset(yolo_root, "val", val_tfms)
+    train_dataset = YOLODataset(yolo_root, "train", train_transforms)
+    val_dataset = YOLODataset(yolo_root, "val", val_transforms)
 
-    logging.info(f"Train samples: {len(train_ds)}")
-    logging.info(f"Val samples: {len(val_ds)}")
+    logging.info(f"Train samples: {len(train_dataset)}")
+    logging.info(f"Val samples: {len(val_dataset)}")
 
-    dl_cfg = train_cfg["dataloader"]
-
+    # =========================
+    # DATALOADER
+    # =========================
     train_loader = DataLoader(
-        train_ds,
-        batch_size=dl_cfg["batch_size"],
+        train_dataset,
+        batch_size=train_cfg["training"]["batch_size"],
         shuffle=True,
-        num_workers=dl_cfg["num_workers"],
+        num_workers=2,
         pin_memory=True,
-        collate_fn=lambda x: tuple(zip(*x))
+        collate_fn=yolo_collate_fn,
     )
 
-    optimizer = torch.optim.SGD(
+    optimizer = SGD(
         model.parameters(),
         lr=train_cfg["training"]["learning_rate"],
         momentum=train_cfg["training"]["momentum"],
-        weight_decay=train_cfg["training"]["weight_decay"]
+        weight_decay=train_cfg["training"]["weight_decay"],
     )
 
     scaler = GradScaler()
     epochs = train_cfg["training"]["epochs"]
 
+    # =========================
+    # TRAINING LOOP
+    # =========================
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
@@ -61,14 +62,23 @@ def train_loop(model, train_cfg, dataset_cfg, device):
         pbar = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{epochs}]")
 
         for images, targets in pbar:
-            images = torch.stack(images).to(device)
-            targets = [t.to(device) for t in targets]
+            images = images.to(device)
 
-            optimizer.zero_grad()
+            # 🔥 CRITICAL FIX: ensure targets is Tensor
+            if isinstance(targets, list):
+                targets = torch.cat(targets, dim=0) if len(targets) > 0 else torch.zeros((0, 6))
+
+            targets = targets.to(device)
+
+            optimizer.zero_grad(set_to_none=True)
 
             with autocast():
                 loss_dict = model(images, targets)
-                loss = loss_dict["total_loss"]
+
+                if isinstance(loss_dict, dict):
+                    loss = loss_dict["total_loss"]
+                else:
+                    loss = loss_dict
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -77,6 +87,7 @@ def train_loop(model, train_cfg, dataset_cfg, device):
             epoch_loss += loss.item()
             pbar.set_postfix(loss=f"{loss.item():.4f}")
 
-        logging.info(
-            f"Epoch [{epoch+1}/{epochs}] | Train Loss: {epoch_loss/len(train_loader):.4f}"
-        )
+        avg_loss = epoch_loss / len(train_loader)
+        logging.info(f"Epoch {epoch+1}/{epochs} | Avg Loss: {avg_loss:.4f}")
+
+    logging.info("✅ YOLO Phase-1 training completed")
