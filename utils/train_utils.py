@@ -1,94 +1,85 @@
 import logging
-from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
+from pathlib import Path
+from tqdm import tqdm
 
-from utils.data_loader import YOLODataset, yolo_collate_fn
+from utils.data_loader import YOLODataset
 from utils.augmentations import get_train_transforms, get_val_transforms
+
+
+def resolve_yolo_root():
+    kaggle_input = Path("/kaggle/input")
+    if kaggle_input.exists():
+        dataset_dir = list(kaggle_input.iterdir())[0]
+        yolo_root = dataset_dir / "data" / "yolo"
+        if not yolo_root.exists():
+            raise RuntimeError("data/yolo not found inside Kaggle dataset")
+        return yolo_root
+    return Path("data/yolo")
 
 
 def train_loop(model, train_cfg, dataset_cfg, device):
     logging.info("Starting YOLO training loop")
 
-    # ---------------------------
-    # Dataset paths
-    # ---------------------------
-    yolo_root = Path(dataset_cfg["yolo"]["root"])
-
-    train_transforms = get_train_transforms(dataset_cfg)
-    val_transforms = get_val_transforms(dataset_cfg)
+    yolo_root = resolve_yolo_root()
 
     train_dataset = YOLODataset(
         yolo_root=yolo_root,
         split="train",
-        transform=train_transforms
+        transform=get_train_transforms(dataset_cfg),
     )
 
     val_dataset = YOLODataset(
         yolo_root=yolo_root,
         split="val",
-        transform=val_transforms
+        transform=get_val_transforms(dataset_cfg),
     )
 
     logging.info(f"Train samples: {len(train_dataset)}")
     logging.info(f"Val samples: {len(val_dataset)}")
 
-    # ---------------------------
-    # DataLoader (Windows-safe)
-    # ---------------------------
-    dl_cfg = train_cfg["dataloader"]
-
     train_loader = DataLoader(
         train_dataset,
-        batch_size=dl_cfg["batch_size"],
+        batch_size=train_cfg["batch_size"],
         shuffle=True,
-        num_workers=0,              # IMPORTANT: Windows safe
-        pin_memory=False,
-        collate_fn=yolo_collate_fn
+        num_workers=2,
+        pin_memory=True,
+        collate_fn=train_dataset.collate_fn,
     )
 
-    # ---------------------------
-    # Optimizer
-    # ---------------------------
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=train_cfg["training"]["learning_rate"],
-        momentum=train_cfg["training"]["momentum"],
-        weight_decay=train_cfg["training"]["weight_decay"]
+        lr=train_cfg["learning_rate"],
+        weight_decay=train_cfg["weight_decay"],
     )
 
-    epochs = train_cfg["training"]["epochs"]
+    scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
 
-    # ===========================
-    # TRAIN LOOP
-    # ===========================
-    for epoch in range(epochs):
+    for epoch in range(train_cfg["epochs"]):
         model.train()
         epoch_loss = 0.0
 
-        for images, targets in train_loader:
+        pbar = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{train_cfg['epochs']}]")
+
+        for images, targets in pbar:
             images = images.to(device)
             targets = targets.to(device)
 
             optimizer.zero_grad()
 
-            loss_dict = model(images, targets)
+            with torch.cuda.amp.autocast(enabled=device.type == "cuda"):
+                loss_dict = model(images, targets)
+                loss = loss_dict["total_loss"]
 
-            # YOLO returns a dict of losses
-            if isinstance(loss_dict, dict):
-                loss = sum(loss_dict.values())
-            else:
-                loss = loss_dict
-
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             epoch_loss += loss.item()
+            pbar.set_postfix(loss=loss.item())
 
         avg_loss = epoch_loss / len(train_loader)
+        logging.info(f"Epoch [{epoch+1}/{train_cfg['epochs']}] | Loss: {avg_loss:.4f}")
 
-        logging.info(
-            f"Epoch [{epoch + 1}/{epochs}] | Train Loss: {avg_loss:.4f}"
-        )
-
-    logging.info("✅ YOLO Phase-1 Training Completed")
+    logging.info("✅ Training completed")
