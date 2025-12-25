@@ -1,72 +1,53 @@
-import torch
-from torch.utils.data import Dataset
-from pathlib import Path
+import os
 import cv2
+import torch
 import numpy as np
+from torch.utils.data import Dataset
 
 
 class YOLODataset(Dataset):
-    def __init__(self, yolo_root: Path, split: str, transform=None):
-        self.images_dir = yolo_root / "images" / split
-        self.labels_dir = yolo_root / "labels" / split
+    def __init__(self, yolo_root, split, transform=None):
+        self.images_dir = os.path.join(yolo_root, "images", split)
+        self.labels_dir = os.path.join(yolo_root, "labels", split)
         self.transform = transform
 
-        if not self.images_dir.exists():
+        if not os.path.exists(self.images_dir):
             raise RuntimeError(f"Images directory not found: {self.images_dir}")
 
-        self.image_files = sorted(
-            list(self.images_dir.glob("*.jpg")) +
-            list(self.images_dir.glob("*.png"))
-        )
+        self.image_files = sorted([
+            f for f in os.listdir(self.images_dir)
+            if f.lower().endswith((".jpg", ".png", ".jpeg"))
+        ])
 
         if len(self.image_files) == 0:
-            raise RuntimeError("No images found")
+            raise RuntimeError(f"No images found in {self.images_dir}")
 
     def __len__(self):
         return len(self.image_files)
 
     def __getitem__(self, idx):
-        img_path = self.image_files[idx]
-        label_path = self.labels_dir / f"{img_path.stem}.txt"
+        img_name = self.image_files[idx]
+        img_path = os.path.join(self.images_dir, img_name)
+        label_path = os.path.join(
+            self.labels_dir, img_name.rsplit(".", 1)[0] + ".txt"
+        )
 
-        image = cv2.imread(str(img_path))
+        image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         targets = []
-        if label_path.exists():
+        if os.path.exists(label_path):
             with open(label_path) as f:
                 for line in f.readlines():
-                    cls, x, y, w, h = map(float, line.split())
+                    cls, x, y, w, h = map(float, line.strip().split())
                     targets.append([cls, x, y, w, h])
 
-        targets = np.array(targets, dtype=np.float32)
+        targets = torch.tensor(targets, dtype=torch.float32)
 
         if self.transform:
-            transformed = self.transform(
-                image=image,
-                bboxes=targets[:, 1:] if len(targets) else [],
-                class_labels=targets[:, 0].tolist() if len(targets) else [],
-            )
+            transformed = self.transform(image=image)
             image = transformed["image"]
-            if len(transformed["bboxes"]) > 0:
-                targets = np.column_stack([
-                    transformed["class_labels"],
-                    transformed["bboxes"]
-                ])
-            else:
-                targets = np.zeros((0, 5), dtype=np.float32)
 
-        return image, torch.tensor(targets, dtype=torch.float32)
+        image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
 
-    @staticmethod
-    def collate_fn(batch):
-        images, targets = zip(*batch)
-        images = torch.stack(images)
-        max_targets = max(t.shape[0] for t in targets)
-
-        padded_targets = []
-        for t in targets:
-            pad = torch.zeros((max_targets - t.shape[0], 5))
-            padded_targets.append(torch.cat([t, pad], dim=0))
-
-        return images, torch.stack(padded_targets)
+        return image, targets
