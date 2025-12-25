@@ -1,27 +1,26 @@
 import torch
+from torch.utils.data import Dataset
+from pathlib import Path
 import cv2
 import numpy as np
-from pathlib import Path
 
 
-class YOLODataset(torch.utils.data.Dataset):
-    def __init__(self, yolo_root, split="train", transform=None):
-        self.yolo_root = Path(yolo_root)
-        self.split = split
+class YOLODataset(Dataset):
+    def __init__(self, yolo_root: Path, split: str, transform=None):
+        self.images_dir = yolo_root / "images" / split
+        self.labels_dir = yolo_root / "labels" / split
         self.transform = transform
-
-        self.images_dir = self.yolo_root / "images" / split
-        self.labels_dir = self.yolo_root / "labels" / split
 
         if not self.images_dir.exists():
             raise RuntimeError(f"Images directory not found: {self.images_dir}")
 
         self.image_files = sorted(
-            [p for p in self.images_dir.iterdir() if p.suffix.lower() in [".jpg", ".png", ".jpeg"]]
+            list(self.images_dir.glob("*.jpg")) +
+            list(self.images_dir.glob("*.png"))
         )
 
         if len(self.image_files) == 0:
-            raise RuntimeError(f"No images found in {self.images_dir}")
+            raise RuntimeError("No images found")
 
     def __len__(self):
         return len(self.image_files)
@@ -33,63 +32,41 @@ class YOLODataset(torch.utils.data.Dataset):
         image = cv2.imread(str(img_path))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        boxes = []
-        labels = []
-
+        targets = []
         if label_path.exists():
             with open(label_path) as f:
-                for line in f:
+                for line in f.readlines():
                     cls, x, y, w, h = map(float, line.split())
+                    targets.append([cls, x, y, w, h])
 
-                    # 🔥 FILTER INVALID BOXES EARLY
-                    if w <= 0 or h <= 0:
-                        continue
-
-                    if not (0 <= x <= 1 and 0 <= y <= 1):
-                        continue
-
-                    boxes.append([x, y, w, h])
-                    labels.append(int(cls))
-
-        boxes = np.array(boxes, dtype=np.float32)
-        labels = np.array(labels, dtype=np.int64)
+        targets = np.array(targets, dtype=np.float32)
 
         if self.transform:
             transformed = self.transform(
                 image=image,
-                bboxes=boxes,
-                class_labels=labels,
+                bboxes=targets[:, 1:] if len(targets) else [],
+                class_labels=targets[:, 0].tolist() if len(targets) else [],
             )
             image = transformed["image"]
-
             if len(transformed["bboxes"]) > 0:
-                boxes = torch.tensor(transformed["bboxes"], dtype=torch.float32)
-                labels = torch.tensor(transformed["class_labels"], dtype=torch.float32).unsqueeze(1)
-                targets = torch.cat([labels, boxes], dim=1)
+                targets = np.column_stack([
+                    transformed["class_labels"],
+                    transformed["bboxes"]
+                ])
             else:
-                targets = torch.zeros((0, 5), dtype=torch.float32)
-        else:
-            image = torch.tensor(image).permute(2, 0, 1).float() / 255.0
-            targets = torch.zeros((0, 5), dtype=torch.float32)
+                targets = np.zeros((0, 5), dtype=np.float32)
 
-        return image, targets
+        return image, torch.tensor(targets, dtype=torch.float32)
 
+    @staticmethod
+    def collate_fn(batch):
+        images, targets = zip(*batch)
+        images = torch.stack(images)
+        max_targets = max(t.shape[0] for t in targets)
 
-def yolo_collate_fn(batch):
-    images = []
-    targets = []
+        padded_targets = []
+        for t in targets:
+            pad = torch.zeros((max_targets - t.shape[0], 5))
+            padded_targets.append(torch.cat([t, pad], dim=0))
 
-    for i, (img, t) in enumerate(batch):
-        images.append(img)
-        if t.numel() > 0:
-            batch_idx = torch.full((t.shape[0], 1), i)
-            targets.append(torch.cat([batch_idx, t], dim=1))
-
-    images = torch.stack(images)
-
-    if len(targets):
-        targets = torch.cat(targets, dim=0)
-    else:
-        targets = torch.zeros((0, 6))
-
-    return images, targets
+        return images, torch.stack(padded_targets)
