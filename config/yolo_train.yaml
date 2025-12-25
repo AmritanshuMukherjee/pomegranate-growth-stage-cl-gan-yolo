@@ -3,12 +3,11 @@ dataset:
   image_size: 640
   num_classes: 3
 
-  # 🔥 Kaggle dataset root (THIS IS THE KEY FIX)
-  kaggle_root: /kaggle/input/pomegranate-dataset/pomegranate_dataset/yolo
-
   yolo:
-    images: images
-    labels: labels
+    root: AUTO
+    train: train
+    val: val
+    test: test
 
   classes:
     - immature
@@ -18,7 +17,12 @@ dataset:
 
 training:
   epochs: 30
-  batch_size: 16
   learning_rate: 0.01
   momentum: 0.937
   weight_decay: 0.0005
+
+
+dataloader:
+  batch_size: 16
+  num_workers: 2
+  pin_memory: true
