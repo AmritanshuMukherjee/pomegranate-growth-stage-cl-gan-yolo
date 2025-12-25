@@ -16,7 +16,8 @@ def train_loop(model, train_cfg, dataset_cfg, device):
     # ==========================
     # Dataset path (Kaggle-safe)
     # ==========================
-    yolo_root = dataset_cfg["dataset"]["yolo"]["root"]
+    yolo_root = dataset_cfg["yolo"]["root"]
+
     logging.info(f"Using Kaggle dataset: {yolo_root}")
 
     train_dataset = YOLODataset(yolo_root, "train", get_train_transforms(dataset_cfg))
