@@ -1,10 +1,3 @@
-import sys
-from pathlib import Path
-
-# 🔥 Add project root to PYTHONPATH
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(PROJECT_ROOT))
-
 import logging
 import torch
 
@@ -14,31 +7,20 @@ from utils.train_utils import train_loop
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
-    )
+    logging.basicConfig(level=logging.INFO)
 
-    logging.info("🚀 Phase-1 | Training YOLO Baseline")
+    train_cfg = load_yaml("config/yolo_train.yaml")
+    dataset_cfg = train_cfg["dataset"]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Using device: {device}")
 
-    train_cfg = load_yaml("config/yolo_train.yaml")
-
-    # ✅ FIX: pass ONLY dataset section
-    dataset_cfg = train_cfg["dataset"]
-
     model = YOLOBase(
-        num_classes=dataset_cfg["num_classes"]
+        num_classes=dataset_cfg["num_classes"],
+        img_size=dataset_cfg["image_size"],
     ).to(device)
 
-    train_loop(
-        model=model,
-        train_cfg=train_cfg,
-        dataset_cfg=dataset_cfg,   # ✅ CORRECT
-        device=device,
-    )
+    train_loop(model, train_cfg["training"], dataset_cfg, device)
 
 
 if __name__ == "__main__":
