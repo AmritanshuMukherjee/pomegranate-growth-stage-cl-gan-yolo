@@ -1,7 +1,10 @@
-import logging
+import os
+import time
 import torch
-from torch.utils.data import DataLoader
+import logging
 from pathlib import Path
+from torch.utils.data import DataLoader
+from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
 
 from utils.data_loader import YOLODataset
@@ -9,14 +12,11 @@ from utils.augmentations import get_train_transforms, get_val_transforms
 
 
 def resolve_yolo_root():
-    kaggle_input = Path("/kaggle/input")
-    if kaggle_input.exists():
-        dataset_dir = list(kaggle_input.iterdir())[0]
-        yolo_root = dataset_dir / "data" / "yolo"
-        if not yolo_root.exists():
-            raise RuntimeError("data/yolo not found inside Kaggle dataset")
-        return yolo_root
-    return Path("data/yolo")
+    kaggle_root = "/kaggle/input/pomegranate-dataset/pomegranate_dataset/yolo"
+    if os.path.exists(kaggle_root):
+        logging.info(f"Using Kaggle dataset: {kaggle_root}")
+        return kaggle_root
+    return "data/yolo"
 
 
 def train_loop(model, train_cfg, dataset_cfg, device):
@@ -24,51 +24,49 @@ def train_loop(model, train_cfg, dataset_cfg, device):
 
     yolo_root = resolve_yolo_root()
 
-    train_dataset = YOLODataset(
-        yolo_root=yolo_root,
-        split="train",
-        transform=get_train_transforms(dataset_cfg),
-    )
+    train_tfms = get_train_transforms(dataset_cfg)
+    val_tfms = get_val_transforms(dataset_cfg)
 
-    val_dataset = YOLODataset(
-        yolo_root=yolo_root,
-        split="val",
-        transform=get_val_transforms(dataset_cfg),
-    )
+    train_ds = YOLODataset(yolo_root, "train", train_tfms)
+    val_ds = YOLODataset(yolo_root, "val", val_tfms)
 
-    logging.info(f"Train samples: {len(train_dataset)}")
-    logging.info(f"Val samples: {len(val_dataset)}")
+    logging.info(f"Train samples: {len(train_ds)}")
+    logging.info(f"Val samples: {len(val_ds)}")
+
+    dl_cfg = train_cfg["dataloader"]
 
     train_loader = DataLoader(
-        train_dataset,
-        batch_size=train_cfg["batch_size"],
+        train_ds,
+        batch_size=dl_cfg["batch_size"],
         shuffle=True,
-        num_workers=2,
+        num_workers=dl_cfg["num_workers"],
         pin_memory=True,
-        collate_fn=train_dataset.collate_fn,
+        collate_fn=lambda x: tuple(zip(*x))
     )
 
-    optimizer = torch.optim.AdamW(
+    optimizer = torch.optim.SGD(
         model.parameters(),
-        lr=train_cfg["learning_rate"],
-        weight_decay=train_cfg["weight_decay"],
+        lr=train_cfg["training"]["learning_rate"],
+        momentum=train_cfg["training"]["momentum"],
+        weight_decay=train_cfg["training"]["weight_decay"]
     )
 
-    scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
+    scaler = GradScaler()
+    epochs = train_cfg["training"]["epochs"]
 
-    for epoch in range(train_cfg["epochs"]):
+    for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
 
-        pbar = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{train_cfg['epochs']}]")
+        pbar = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{epochs}]")
 
         for images, targets in pbar:
-            images = images.to(device)
-            targets = targets.to(device)
+            images = torch.stack(images).to(device)
+            targets = [t.to(device) for t in targets]
 
             optimizer.zero_grad()
 
-            with torch.cuda.amp.autocast(enabled=device.type == "cuda"):
+            with autocast():
                 loss_dict = model(images, targets)
                 loss = loss_dict["total_loss"]
 
@@ -77,9 +75,8 @@ def train_loop(model, train_cfg, dataset_cfg, device):
             scaler.update()
 
             epoch_loss += loss.item()
-            pbar.set_postfix(loss=loss.item())
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
 
-        avg_loss = epoch_loss / len(train_loader)
-        logging.info(f"Epoch [{epoch+1}/{train_cfg['epochs']}] | Loss: {avg_loss:.4f}")
-
-    logging.info("✅ Training completed")
+        logging.info(
+            f"Epoch [{epoch+1}/{epochs}] | Train Loss: {epoch_loss/len(train_loader):.4f}"
+        )
