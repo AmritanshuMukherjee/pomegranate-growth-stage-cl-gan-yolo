@@ -17,10 +17,10 @@ class YOLODataset(Dataset):
         if not os.path.isdir(self.images_dir):
             raise RuntimeError(f"Images directory not found: {self.images_dir}")
 
-        self.image_files = sorted([
+        self.image_files = sorted(
             f for f in os.listdir(self.images_dir)
-            if f.endswith((".jpg", ".png", ".jpeg"))
-        ])
+            if f.endswith((".jpg", ".jpeg", ".png"))
+        )
 
         if len(self.image_files) == 0:
             raise RuntimeError(f"No images found in {self.images_dir}")
@@ -36,7 +36,8 @@ class YOLODataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         label_path = os.path.join(
-            self.labels_dir, img_name.replace(".jpg", ".txt").replace(".png", ".txt")
+            self.labels_dir,
+            img_name.rsplit(".", 1)[0] + ".txt"
         )
 
         boxes = []
@@ -52,7 +53,13 @@ class YOLODataset(Dataset):
             transformed = self.transform(image=image)
             image = transformed["image"]
 
-        image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
+        # 🔥 FINAL FIX: handle both Tensor and NumPy safely
+        if isinstance(image, np.ndarray):
+            image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
+        elif isinstance(image, torch.Tensor):
+            image = image.float()
+        else:
+            raise TypeError(f"Unexpected image type: {type(image)}")
 
         targets = torch.zeros((len(boxes), 6))
         if len(boxes) > 0:
