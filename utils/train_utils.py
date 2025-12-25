@@ -1,34 +1,48 @@
-import os
 import logging
 from pathlib import Path
+
 import torch
 from torch.utils.data import DataLoader
+from torch.optim import SGD
 from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
 
 from utils.data_loader import YOLODataset
-from utils.augmentations import get_train_transforms, get_val_transforms
 
 
 def train_loop(model, train_cfg, dataset_cfg, device):
     logging.info("Starting YOLO training loop")
 
-    # ✅ Kaggle dataset path (verified)
-    yolo_root = "/kaggle/input/pomegranate-dataset/pomegranate_dataset/yolo"
+    # --------------------------------------------------
+    # Dataset root (AUTO works on Kaggle)
+    # --------------------------------------------------
+    yolo_root = dataset_cfg["dataset"]["yolo"]["root"]
+    if yolo_root == "AUTO":
+        yolo_root = "/kaggle/input/pomegranate-dataset/pomegranate_dataset/yolo"
+
     logging.info(f"Using Kaggle dataset: {yolo_root}")
 
-    # =========================
-    # DATA
-    # =========================
-    train_transforms = get_train_transforms(dataset_cfg)
-    val_transforms = get_val_transforms(dataset_cfg)
+    # --------------------------------------------------
+    # Experiment directory
+    # --------------------------------------------------
+    exp_dir = Path("experiments/yolo_baseline")
+    exp_dir.mkdir(parents=True, exist_ok=True)
 
-    train_dataset = YOLODataset(yolo_root, "train", train_transforms)
-    val_dataset = YOLODataset(yolo_root, "val", val_transforms)
+    best_ckpt = exp_dir / "best.pt"
+    last_ckpt = exp_dir / "last.pt"
+
+    # --------------------------------------------------
+    # Dataset
+    # --------------------------------------------------
+    train_dataset = YOLODataset(yolo_root, split="train")
+    val_dataset = YOLODataset(yolo_root, split="val")
 
     logging.info(f"Train samples: {len(train_dataset)}")
     logging.info(f"Val samples: {len(val_dataset)}")
 
+    # --------------------------------------------------
+    # DataLoader
+    # --------------------------------------------------
     dl_cfg = train_cfg["dataloader"]
 
     train_loader = DataLoader(
@@ -36,14 +50,13 @@ def train_loop(model, train_cfg, dataset_cfg, device):
         batch_size=dl_cfg["batch_size"],
         shuffle=True,
         num_workers=dl_cfg["num_workers"],
-        pin_memory=True,
-        collate_fn=train_dataset.collate_fn,
+        pin_memory=dl_cfg["pin_memory"],
     )
 
-    # =========================
-    # OPTIMIZER
-    # =========================
-    optimizer = torch.optim.SGD(
+    # --------------------------------------------------
+    # Optimizer
+    # --------------------------------------------------
+    optimizer = SGD(
         model.parameters(),
         lr=train_cfg["training"]["learning_rate"],
         momentum=train_cfg["training"]["momentum"],
@@ -53,24 +66,18 @@ def train_loop(model, train_cfg, dataset_cfg, device):
     epochs = train_cfg["training"]["epochs"]
     scaler = GradScaler()
 
-    # =========================
-    # MODEL SAVE PATH
-    # =========================
-    exp_dir = Path("experiments/yolo_baseline")
-    exp_dir.mkdir(parents=True, exist_ok=True)
-
     best_loss = float("inf")
 
-    # =========================
-    # TRAIN LOOP
-    # =========================
+    # --------------------------------------------------
+    # Training loop
+    # --------------------------------------------------
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
 
         pbar = tqdm(
             train_loader,
-            desc=f"Epoch [{epoch+1}/{epochs}]",
+            desc=f"Epoch [{epoch + 1}/{epochs}]",
             ncols=100,
         )
 
@@ -78,7 +85,7 @@ def train_loop(model, train_cfg, dataset_cfg, device):
             images = images.to(device)
             targets = targets.to(device)
 
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
 
             with autocast():
                 loss_dict = model(images, targets)
@@ -92,38 +99,35 @@ def train_loop(model, train_cfg, dataset_cfg, device):
             pbar.set_postfix(loss=f"{loss.item():.4f}")
 
         avg_loss = epoch_loss / len(train_loader)
+        logging.info(f"Epoch {epoch + 1}/{epochs} | Avg Loss: {avg_loss:.4f}")
 
-        logging.info(
-            f"Epoch {epoch+1}/{epochs} | Avg Loss: {avg_loss:.4f}"
-        )
-
-        # =========================
-        # SAVE LAST MODEL
-        # =========================
+        # --------------------------------------------------
+        # Save LAST checkpoint
+        # --------------------------------------------------
         torch.save(
             {
                 "epoch": epoch + 1,
-                "model_state": model.state_dict(),
-                "optimizer_state": optimizer.state_dict(),
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
                 "loss": avg_loss,
             },
-            exp_dir / "last_model.pt",
+            last_ckpt,
         )
 
-        # =========================
-        # SAVE BEST MODEL
-        # =========================
+        # --------------------------------------------------
+        # Save BEST checkpoint
+        # --------------------------------------------------
         if avg_loss < best_loss:
             best_loss = avg_loss
             torch.save(
                 {
                     "epoch": epoch + 1,
-                    "model_state": model.state_dict(),
-                    "optimizer_state": optimizer.state_dict(),
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
                     "loss": avg_loss,
                 },
-                exp_dir / "best_model.pt",
+                best_ckpt,
             )
-            logging.info(f"🔥 New best model saved (loss={best_loss:.4f})")
+            logging.info(f"✅ Best model saved (loss={best_loss:.4f})")
 
     logging.info("✅ YOLO Phase-1 training completed")
