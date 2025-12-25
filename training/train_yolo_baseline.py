@@ -26,10 +26,9 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Using device: {device}")
 
-    model = YOLOBase(
-        num_classes=dataset_cfg["num_classes"],
-        img_size=dataset_cfg["image_size"],
-    ).to(device)
+   model = YOLOBase(
+    num_classes=dataset_cfg["num_classes"]
+).to(device)
 
     train_loop(model, train_cfg["training"], dataset_cfg, device)
 
