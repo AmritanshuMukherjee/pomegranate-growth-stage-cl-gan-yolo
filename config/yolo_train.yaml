@@ -3,8 +3,9 @@ dataset:
   image_size: 640
   num_classes: 3
 
+  # Kaggle YOLO dataset root (auto-detected)
   yolo:
-    root: /kaggle/input/pomegranate-dataset/pomegranate_dataset/yolo
+    root: AUTO
     train: train
     val: val
     test: test
@@ -13,3 +14,14 @@ dataset:
     - immature
     - mature
     - overripe
+
+training:
+  epochs: 30
+  learning_rate: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+
+dataloader:
+  batch_size: 16
+  num_workers: 2
+  pin_memory: true
