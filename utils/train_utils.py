@@ -7,10 +7,18 @@ from torch.optim import SGD
 from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
 
-from utils.data_loader import YOLODataset
+from utils.data_loader import YOLODataset, yolo_collate_fn
 
 
 def train_loop(model, train_cfg, dataset_cfg, device):
+    """
+    YOLO Phase-1 training loop with:
+    - AMP (fp16)
+    - Progress bar
+    - Best + Last checkpoint saving
+    - Kaggle AUTO dataset support
+    """
+
     logging.info("Starting YOLO training loop")
 
     # --------------------------------------------------
@@ -25,7 +33,7 @@ def train_loop(model, train_cfg, dataset_cfg, device):
     logging.info(f"Using dataset root: {yolo_root}")
 
     # --------------------------------------------------
-    # Experiment directory
+    # Experiment directory (model saving)
     # --------------------------------------------------
     exp_dir = Path("experiments/yolo_baseline")
     exp_dir.mkdir(parents=True, exist_ok=True)
@@ -43,7 +51,7 @@ def train_loop(model, train_cfg, dataset_cfg, device):
     logging.info(f"Val samples: {len(val_dataset)}")
 
     # --------------------------------------------------
-    # DataLoader
+    # DataLoader (IMPORTANT: custom collate_fn)
     # --------------------------------------------------
     dl_cfg = train_cfg["dataloader"]
 
@@ -53,6 +61,7 @@ def train_loop(model, train_cfg, dataset_cfg, device):
         shuffle=True,
         num_workers=dl_cfg["num_workers"],
         pin_memory=dl_cfg["pin_memory"],
+        collate_fn=yolo_collate_fn,  # 🔥 REQUIRED for YOLO targets
     )
 
     # --------------------------------------------------
@@ -84,8 +93,8 @@ def train_loop(model, train_cfg, dataset_cfg, device):
         )
 
         for images, targets in pbar:
-            images = images.to(device)
-            targets = targets.to(device)
+            images = images.to(device, non_blocking=True)
+            targets = targets.to(device, non_blocking=True)
 
             optimizer.zero_grad(set_to_none=True)
 
