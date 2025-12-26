@@ -6,11 +6,7 @@ from torch.utils.data import Dataset
 
 
 class YOLODataset(Dataset):
-    def __init__(self, root, split, transform=None):
-        self.root = root
-        self.split = split
-        self.transform = transform
-
+    def __init__(self, root, split):
         self.images_dir = os.path.join(root, "images", split)
         self.labels_dir = os.path.join(root, "labels", split)
 
@@ -35,6 +31,9 @@ class YOLODataset(Dataset):
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
+        # 🔥 REQUIRED FIX
+        image = cv2.resize(image, (640, 640))
+
         label_path = os.path.join(
             self.labels_dir,
             img_name.rsplit(".", 1)[0] + ".txt"
@@ -42,45 +41,33 @@ class YOLODataset(Dataset):
 
         boxes = []
         if os.path.exists(label_path):
-            with open(label_path, "r") as f:
-                for line in f.readlines():
-                    cls, x, y, w, h = map(float, line.strip().split())
+            with open(label_path) as f:
+                for line in f:
+                    cls, x, y, w, h = map(float, line.split())
                     boxes.append([cls, x, y, w, h])
 
         boxes = np.array(boxes, dtype=np.float32)
 
-        if self.transform:
-            transformed = self.transform(image=image)
-            image = transformed["image"]
-
-        # 🔥 FINAL FIX: handle both Tensor and NumPy safely
-        if isinstance(image, np.ndarray):
-            image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
-        elif isinstance(image, torch.Tensor):
-            image = image.float()
-        else:
-            raise TypeError(f"Unexpected image type: {type(image)}")
+        image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
 
         targets = torch.zeros((len(boxes), 6))
         if len(boxes) > 0:
             targets[:, 1:] = torch.from_numpy(boxes)
 
-        targets[:, 0] = idx  # batch index placeholder
-
+        targets[:, 0] = idx
         return image, targets
 
 
 def yolo_collate_fn(batch):
-    images = []
-    targets = []
+    images, targets = [], []
 
     for i, (img, tgt) in enumerate(batch):
         images.append(img)
-        if tgt.numel() > 0:
+        if tgt.numel():
             tgt[:, 0] = i
             targets.append(tgt)
 
     images = torch.stack(images, 0)
-    targets = torch.cat(targets, 0) if len(targets) > 0 else torch.zeros((0, 6))
+    targets = torch.cat(targets, 0) if targets else torch.zeros((0, 6))
 
     return images, targets
