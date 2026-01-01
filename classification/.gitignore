@@ -1,0 +1,18 @@
+# datasets
+data/
+datasets/
+classification/data.zip
+*.zip
+
+# weights
+*.pt
+*.pth
+models/weights/
+experiments/
+
+# environments
+venv/
+.env
+
+# notebooks
+*.ipynb_checkpoints

@@ -1,0 +1,14 @@
+dataset:
+  num_classes: 3
+  image_size: 640
+  yolo:
+    root: AUTO
+
+training:
+  epochs: 50
+  lr: 0.001
+  save_dir: yolo_detection/experiments/yolo_detect
+
+dataloader:
+  batch_size: 16
+  num_workers: 2

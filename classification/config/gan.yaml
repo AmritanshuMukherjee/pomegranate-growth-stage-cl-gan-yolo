@@ -1,0 +1,65 @@
+# ==========================================
+# GAN Configuration for Data Augmentation
+# Model: Pix2Pix (U-Net Generator + PatchGAN)
+# ==========================================
+
+gan:
+  name: "Pix2Pix"
+
+  # =========================
+  # Generator Configuration
+  # =========================
+  generator:
+    input_channels: 3
+    output_channels: 3
+    base_filters: 64
+    num_downsampling: 3
+    num_upsampling: 3
+    use_dropout: true
+    dropout_rate: 0.5
+    use_batch_norm: true
+
+  # =========================
+  # Discriminator Configuration
+  # =========================
+  discriminator:
+    input_channels: 6          # real image (3) + generated image (3)
+    base_filters: 64
+    num_layers: 3
+    use_batch_norm: true
+
+  # =========================
+  # Training Parameters
+  # =========================
+  training:
+    batch_size: 4
+    epochs: 100
+    generator_lr: 0.0002
+    discriminator_lr: 0.0002
+    beta1: 0.5
+    beta2: 0.999
+
+    # Loss weights
+    gan_loss_weight: 1.0
+    l1_loss_weight: 100.0
+    discriminator_loss_weight: 0.5
+
+  # =========================
+  # Data Augmentation (GAN)
+  # =========================
+  augmentation:
+    resize: 256
+    random_crop: true
+    horizontal_flip: 0.5
+
+  # =========================
+  # Synthetic Image Generation
+  # =========================
+  generation:
+    # Number of synthetic variants PER REAL IMAGE
+    # Safe value to keep total dataset < 35,000
+    num_samples_per_class: 4
+
+    output_dir: "data/synthetic/gan_images"
+    labels_dir: "data/synthetic/gan_labels"
+    seed: 42

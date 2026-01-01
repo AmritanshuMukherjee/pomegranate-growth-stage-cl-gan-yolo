@@ -1,0 +1,8 @@
+dataset:
+  yolo_root: AUTO
+  num_classes: 3
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 0.0005

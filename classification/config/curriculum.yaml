@@ -1,0 +1,63 @@
+# Curriculum Learning Configuration
+
+curriculum:
+  enabled: true
+  
+  # Curriculum stages
+  stages:
+    stage_1:
+      name: "easy"
+      difficulty: "low"
+      criteria:
+        - "high_confidence_labels"
+        - "clear_visibility"
+        - "standard_lighting"
+      percentage: 0.3
+      epochs: 20
+    
+    stage_2:
+      name: "medium"
+      difficulty: "medium"
+      criteria:
+        - "medium_confidence_labels"
+        - "partial_occlusion"
+        - "varying_lighting"
+      percentage: 0.5
+      epochs: 30
+    
+    stage_3:
+      name: "hard"
+      difficulty: "high"
+      criteria:
+        - "low_confidence_labels"
+        - "heavy_occlusion"
+        - "challenging_lighting"
+        - "small_objects"
+      percentage: 1.0
+      epochs: 50
+  
+  # Difficulty metrics
+  difficulty_metrics:
+    - "object_size"
+    - "occlusion_level"
+    - "lighting_quality"
+    - "background_complexity"
+    - "label_confidence"
+  
+  # Transition strategy
+  transition:
+    type: "gradual"  # gradual, step, adaptive
+    schedule: "linear"
+    warmup_epochs: 10
+  
+  # Data selection
+  selection:
+    method: "scoring"  # scoring, clustering, random
+    scoring_function: "weighted_sum"
+    weights:
+      object_size: 0.2
+      occlusion_level: 0.3
+      lighting_quality: 0.2
+      background_complexity: 0.15
+      label_confidence: 0.15
+

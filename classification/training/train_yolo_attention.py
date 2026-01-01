@@ -1,0 +1,28 @@
+import yaml, torch, logging
+from models.yolo.yolo_attention import YOLOAttention
+from utils.train_utils import train_loop
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+
+def main():
+    logging.info("Training YOLO + CBAM Attention")
+
+    dataset = yaml.safe_load(open("config/dataset.yaml"))["dataset"]
+    cfg = yaml.safe_load(open("config/train_common.yaml"))["training"]
+
+    model = YOLOAttention(
+        num_classes=dataset["num_classes"],
+        input_size=dataset["image_size"],
+        model_size="medium",
+        attention_type="CBAM"
+    )
+
+    train_loop(
+        model=model,
+        dataset_cfg=dataset,
+        train_cfg=cfg,
+        experiment_name="yolo_attention"
+    )
+
+if __name__ == "__main__":
+    main()

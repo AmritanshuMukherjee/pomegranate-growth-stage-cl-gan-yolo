@@ -1,0 +1,44 @@
+# Attention Mechanism Configuration
+
+attention:
+  # Available attention types: CBAM, SE, CoordAttention, SelfAttention
+  type: "CBAM"
+  
+  # CBAM (Convolutional Block Attention Module) configuration
+  cbam:
+    reduction_ratio: 16
+    kernel_size: 7
+    use_spatial: true
+    use_channel: true
+  
+  # SE (Squeeze-and-Excitation) configuration
+  se:
+    reduction_ratio: 16
+  
+  # CoordAttention configuration
+  coord_attention:
+    reduction_ratio: 32
+  
+  # Self-Attention configuration
+  self_attention:
+    num_heads: 8
+    dropout: 0.1
+  
+  # Integration points in YOLO
+  integration:
+    backbone: true
+    neck: true
+    head: false
+  
+  # Attention placement
+  placement:
+    - "C3_1"
+    - "C3_2"
+    - "C3_3"
+    - "SPPF"
+  
+  # Training
+  training:
+    attention_loss_weight: 0.1
+    use_attention_regularization: true
+

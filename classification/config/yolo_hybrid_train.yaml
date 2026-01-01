@@ -1,0 +1,13 @@
+dataset:
+  num_classes: 3
+  yolo:
+    root: AUTO
+
+training:
+  epochs: 40
+  lr: 0.0002
+  unfreeze_epoch: 10   # 🔥 Phase-3 starts here
+
+dataloader:
+  batch_size: 16
+  num_workers: 2

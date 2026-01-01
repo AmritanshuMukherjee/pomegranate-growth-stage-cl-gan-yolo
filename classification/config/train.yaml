@@ -1,0 +1,57 @@
+# Main Training Configuration
+
+training:
+  # Experiment settings
+  experiment_name: "exp_001_baseline"
+  experiment_dir: "experiments"
+  resume: false
+  resume_checkpoint: null
+  
+  # Model selection
+  model_type: "baseline"  # baseline, attention, curriculum, gan, full
+  
+  # Training phases
+  phases:
+    phase_1_gan:
+      enabled: true
+      name: "GAN Training"
+      epochs: 100
+      checkpoint_dir: "experiments/exp_004_gan/checkpoints"
+    
+    phase_2_curriculum:
+      enabled: true
+      name: "Curriculum Learning"
+      epochs: 100
+      checkpoint_dir: "experiments/exp_003_curriculum/checkpoints"
+    
+    phase_3_full:
+      enabled: true
+      name: "Full Model Training"
+      epochs: 100
+      checkpoint_dir: "experiments/exp_005_full_model/checkpoints"
+  
+  # Logging
+  logging:
+    log_dir: "experiments/{experiment_name}/logs"
+    log_interval: 10
+    save_interval: 10
+    tensorboard: true
+    wandb: false
+    wandb_project: "pomegranate-growth-stages"
+  
+  # Checkpointing
+  checkpoint:
+    save_dir: "experiments/{experiment_name}/checkpoints"
+    save_best: true
+    save_last: true
+    max_checkpoints: 5
+  
+  # Device
+  device: "cpu"  # cuda, cpu, mps (auto-detect: will use cpu if cuda not available)
+  num_workers: 8
+  pin_memory: true
+  
+  # Mixed precision
+  mixed_precision: true
+  amp: true
+
