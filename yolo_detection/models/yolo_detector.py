@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 
+# -------------------------------------------------
+# IMPORTANT: absolute imports from PROJECT ROOT
+# -------------------------------------------------
 from models.yolo.backbone import CSPDarknet
 from models.yolo.head import YOLOHead
 from models.yolo.losses import YOLOLoss
@@ -8,11 +11,16 @@ from models.yolo.losses import YOLOLoss
 
 class YOLODetector(nn.Module):
     """
-    Single-stage YOLO Detector
-    (Detection + Classification together)
+    Pure YOLO Detection Model
+    (No classification head, no hybrid logic)
     """
 
-    def __init__(self, num_classes, model_size="medium", anchors=None):
+    def __init__(
+        self,
+        num_classes: int,
+        model_size: str = "medium",
+        anchors=None,
+    ):
         super().__init__()
 
         self.backbone = CSPDarknet(model_size=model_size)
@@ -28,7 +36,7 @@ class YOLODetector(nn.Module):
         features = self.backbone(images)
         outputs = self.head(features)
 
-        if self.training:
+        if self.training and targets is not None:
             return self.criterion(outputs, targets)
 
         return self.head.decode_predictions(outputs)
