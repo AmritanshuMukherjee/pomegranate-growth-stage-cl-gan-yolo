@@ -1,50 +1,57 @@
 import os
-import logging
 import torch
+import logging
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from tqdm import tqdm
 
 from yolo_detection.models.yolo_detector import YOLODetector
-from utils.data_loader import YOLODataset
-from utils.config_loader import load_yaml
+from yolo_detection.utils.yolo_dataset import YOLODetectionDataset
+import yaml
 
 
-def resolve_dataset_root(cfg):
+def load_cfg(path):
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+
+def resolve_dataset_root():
     if os.path.exists("/kaggle/input"):
         return "/kaggle/input/pomegranate-dataset/pomegranate_dataset/yolo"
-    if cfg["dataset"]["yolo"]["root"] == "AUTO":
-        return "data/yolo"
-    return cfg["dataset"]["yolo"]["root"]
+    return "data/yolo"
 
 
 def main():
     logging.basicConfig(level=logging.INFO)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    logging.info(f"Using device: {device}")
 
-    cfg = load_yaml("yolo_detection/config/yolo_detect.yaml")
-    yolo_root = resolve_dataset_root(cfg)
+    cfg = load_cfg("yolo_detection/config/yolo_detect.yaml")
+    dataset_root = resolve_dataset_root()
+    logging.info(f"Using dataset root: {dataset_root}")
 
-    train_ds = YOLODataset(yolo_root, split="train")
+    train_ds = YOLODetectionDataset(
+        dataset_root,
+        split="train",
+        img_size=cfg["dataset"]["image_size"]
+    )
 
     train_loader = DataLoader(
         train_ds,
-        batch_size=cfg["dataloader"]["batch_size"],
+        batch_size=cfg["training"]["batch_size"],
         shuffle=True,
-        num_workers=cfg["dataloader"]["num_workers"],
+        num_workers=2,
         pin_memory=True,
-        collate_fn=train_ds.collate_fn,
+        collate_fn=lambda x: tuple(zip(*x))
     )
 
     model = YOLODetector(
-        num_classes=cfg["dataset"]["num_classes"],
-        model_size="medium",
+        num_classes=cfg["dataset"]["num_classes"]
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=cfg["training"]["lr"])
-    save_dir = cfg["training"]["save_dir"]
-    os.makedirs(save_dir, exist_ok=True)
 
+    os.makedirs("yolo_detection/experiments/yolo_detect", exist_ok=True)
     best_loss = float("inf")
 
     for epoch in range(cfg["training"]["epochs"]):
@@ -52,11 +59,13 @@ def main():
         epoch_loss = 0.0
 
         pbar = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{cfg['training']['epochs']}]")
-        for images, targets in pbar:
-            images, targets = images.to(device), targets.to(device)
+
+        for imgs, targets in pbar:
+            imgs = torch.stack(imgs).to(device)
+            targets = [t.to(device) for t in targets]
 
             optimizer.zero_grad()
-            loss_dict = model(images, targets)
+            loss_dict = model(imgs, targets)
             loss = loss_dict["total_loss"]
 
             loss.backward()
@@ -66,13 +75,13 @@ def main():
             pbar.set_postfix(loss=f"{loss.item():.4f}")
 
         avg_loss = epoch_loss / len(train_loader)
-        logging.info(f"Epoch {epoch+1} | Loss={avg_loss:.4f}")
+        logging.info(f"Epoch {epoch+1} | Loss: {avg_loss:.4f}")
 
         if avg_loss < best_loss:
             best_loss = avg_loss
             torch.save(
                 {"model_state_dict": model.state_dict()},
-                f"{save_dir}/best.pt",
+                "yolo_detection/experiments/yolo_detect/best.pt"
             )
             logging.info("✅ Best YOLO detector saved")
 
