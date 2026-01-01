@@ -4,7 +4,10 @@ import torch.nn as nn
 # -------------------------------------------------
 # IMPORTANT: absolute imports from PROJECT ROOT
 # -------------------------------------------------
-from models.yolo.backbone import CSPDarknet
+from pomegranate_growth_stage_cl_gan_yolo.models.yolo.backbone import CSPDarknet
+from pomegranate_growth_stage_cl_gan_yolo.models.yolo.head import YOLOHead
+from pomegranate_growth_stage_cl_gan_yolo.models.yolo.losses import YOLOLoss
+
 from models.yolo.head import YOLOHead
 from models.yolo.losses import YOLOLoss
 
